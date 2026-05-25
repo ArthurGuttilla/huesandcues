@@ -194,9 +194,10 @@ function colorAt(c, r) {
   const nx = Math.abs(x - 0.5) * 2;
   const ny = Math.abs(y - 0.5) * 2;
   const d  = Math.max(nx, ny);
-  // Mistura com o cinza: centro = cinza, borda = base
-  const t  = Math.pow(d, 1.4); // curva: dessatura mais perto do centro
-  const rgb = base.map((v, i) => Math.round(lerp(CENTER[i], v, t)));
+  // Mistura com o cinza: leve, só perto do meio
+  const t   = Math.pow(d, 0.5);                 // sobe rápido → desat só no miolo
+  const mix = Math.max(0, 1 - t) * 0.55;        // intensidade máx 55%
+  const rgb = base.map((v, i) => Math.round(lerp(v, CENTER[i], mix)));
   return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
 }
 const COL_LABELS = Array.from({length: COLS}, (_, i) => String(i + 1));
