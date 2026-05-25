@@ -192,7 +192,9 @@ const PIN_COLORS = [
    Estado
    ============================================================ */
 const state = {
-  screen: "setup",      // setup | leader | guess | reveal | end
+  screen: "setup",      // setup | handoff | leader | guess | reveal | end
+  countdown: 0,
+  countdownTimer: null,
   players: [],          // {name, color, score}
   leaderIndex: 0,
   round: 0,
@@ -250,6 +252,7 @@ function render() {
   app.innerHTML = "";
   switch (state.screen) {
     case "setup":   app.append(renderSetup()); break;
+    case "handoff": app.append(renderHandoff()); break;
     case "leader":  app.append(renderLeader()); break;
     case "guess":   app.append(renderGuess()); break;
     case "reveal":  app.append(renderReveal()); break;
@@ -357,8 +360,40 @@ function startRound() {
   state.guessOrder = shuffle(others);
   state.currentGuessIdx = 0;
   state.selected = null;
-  state.screen = "leader";
+  startHandoff();
+}
+
+function startHandoff() {
+  state.screen = "handoff";
+  state.countdown = 5;
+  if (state.countdownTimer) clearInterval(state.countdownTimer);
+  state.countdownTimer = setInterval(() => {
+    state.countdown -= 1;
+    if (state.countdown <= 0) {
+      clearInterval(state.countdownTimer);
+      state.countdownTimer = null;
+      state.screen = "leader";
+    }
+    render();
+  }, 1000);
   render();
+}
+
+function renderHandoff() {
+  const leader = state.players[state.leaderIndex];
+  const wrap = el("div", { class: "stack" });
+  const panel = el("div", { class: "panel stack center", style: "padding:40px 14px" });
+  panel.append(el("h2", { style: "margin-top:0" }, `Passem o celular para ${leader.name}`));
+  panel.append(el("p", { class: "small" }, "Só o líder deve olhar a próxima tela."));
+  panel.append(el("div", {
+    style: `font-size:96px;font-weight:800;color:${leader.color};line-height:1;margin:20px 0;`
+  }, String(state.countdown)));
+  panel.append(el("div", { class: "row", style: "justify-content:center" },
+    el("div", { class: "pin", style: `background:${leader.color}` }),
+    el("div", { style: "font-weight:700" }, `Líder: ${leader.name}`)
+  ));
+  wrap.append(panel);
+  return wrap;
 }
 
 /* ---- LEADER ---- */
