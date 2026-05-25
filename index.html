@@ -71,10 +71,9 @@
   }
   .board {
     display: grid;
-    grid-template-columns: 22px repeat(30, 1fr);
-    grid-template-rows: 18px repeat(16, 1fr);
+    grid-template-columns: 24px repeat(var(--cols, 14), 1fr);
+    grid-template-rows: 22px repeat(var(--rows, 10), 1fr);
     width: 100%;
-    aspect-ratio: calc((30 + 0.7) / (16 + 0.6));
     gap: 0;
   }
   .hdr {
@@ -169,17 +168,39 @@
    Cores: gera tabuleiro 30x16 inspirado em Hues & Cues.
    Colunas = matiz (hue), Linhas = luminosidade.
    ============================================================ */
-const COLS = 30, ROWS = 16;
+const COLS = 14, ROWS = 10;
+// Cantos do tabuleiro (misturas), lados puros, centro dessaturado.
+//   TL (0,0): laranja (vermelho + amarelo)
+//   TR (1,0): lima    (amarelo + verde)
+//   BL (0,1): roxo    (vermelho + azul)
+//   BR (1,1): turquesa(verde + azul)
+// → topo=amarelo, base=azul, esquerda=vermelho, direita=verde
+const CORNERS = {
+  TL: [240, 150,  20],
+  TR: [170, 215,  35],
+  BL: [180,  35, 180],
+  BR: [ 25, 175, 185],
+};
+const CENTER = [165, 165, 165]; // cinza
+function lerp(a, b, t) { return a + (b - a) * t; }
 function colorAt(c, r) {
-  // c: 0..29 hue, r: 0..15 lightness top→bottom
-  const hue = (c / COLS) * 360;
-  const sat = 95;
-  // top (r=0) ~ light (90%), bottom (r=15) ~ dark (10%)
-  const light = 90 - (r / (ROWS - 1)) * 80;
-  return `hsl(${hue.toFixed(1)} ${sat}% ${light.toFixed(1)}%)`;
+  const x = COLS === 1 ? 0.5 : c / (COLS - 1);
+  const y = ROWS === 1 ? 0.5 : r / (ROWS - 1);
+  // Bilinear entre as 4 quinas
+  const top    = CORNERS.TL.map((v, i) => lerp(v, CORNERS.TR[i], x));
+  const bottom = CORNERS.BL.map((v, i) => lerp(v, CORNERS.BR[i], x));
+  const base   = top.map((v, i) => lerp(v, bottom[i], y));
+  // Distância normalizada ao centro (chebyshev em [0,1])
+  const nx = Math.abs(x - 0.5) * 2;
+  const ny = Math.abs(y - 0.5) * 2;
+  const d  = Math.max(nx, ny);
+  // Mistura com o cinza: centro = cinza, borda = base
+  const t  = Math.pow(d, 1.4); // curva: dessatura mais perto do centro
+  const rgb = base.map((v, i) => Math.round(lerp(CENTER[i], v, t)));
+  return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
 }
 const COL_LABELS = Array.from({length: COLS}, (_, i) => String(i + 1));
-const ROW_LABELS = "ABCDEFGHIJKLMNOP".split("");
+const ROW_LABELS = "ABCDEFGHIJKLMNOP".slice(0, ROWS).split("");
 
 /* Cores disponíveis para pinos */
 const PIN_COLORS = [
@@ -604,7 +625,8 @@ function renderScoreboard() {
 /* ---- Board renderer ---- */
 function renderBoard({ showTarget, showOtherGuesses, interactive, onPick, selected, forPlayerIndex }) {
   const boardWrap = el("div", { class: "board-wrap" });
-  const board = el("div", { class: "board" });
+  const board = el("div", { class: "board",
+    style: `--cols:${COLS};--rows:${ROWS};aspect-ratio:${(COLS + 0.8)}/${(ROWS + 0.9)};` });
 
   // Top-left corner
   board.append(el("div", { class: "hdr" }, ""));
