@@ -278,6 +278,7 @@ function render() {
     case "leader":  app.append(renderLeader()); break;
     case "guess":   app.append(renderGuess()); break;
     case "reveal":  app.append(renderReveal()); break;
+    case "end":     app.append(renderEnd()); break;
   }
 }
 
@@ -578,11 +579,171 @@ function renderReveal() {
     startRound();
   }}, "Próxima rodada"));
   actions.append(el("button", { class: "secondary", onclick: () => {
-    if (confirm("Encerrar partida?")) { state.screen = "setup"; render(); }
+    if (confirm("Encerrar partida?")) { state.screen = "end"; render(); }
   }}, "Encerrar partida"));
   wrap.append(actions);
 
   return wrap;
+}
+
+/* ---- END / CHAMPION ---- */
+function renderEnd() {
+  const sorted = state.players.map((p, i) => ({ ...p, idx: i }))
+    .sort((a, b) => b.score - a.score);
+  const top = sorted[0].score;
+  const champions = sorted.filter(p => p.score === top);
+
+  const wrap = el("div", { class: "stack" });
+
+  const panel = el("div", { class: "panel stack center" });
+  panel.append(el("h1", { style: "margin:0" },
+    champions.length > 1 ? "Empate!" : "Campeão!"));
+  panel.append(el("p", { class: "small" },
+    `${state.round} rodada${state.round === 1 ? "" : "s"} jogada${state.round === 1 ? "" : "s"}`));
+
+  champions.forEach(c => {
+    panel.append(el("div", { class: "row", style: "justify-content:center;gap:12px;margin:8px 0;" },
+      el("div", { class: "pin", style: `background:${c.color};width:42px;height:42px;` }),
+      el("div", { style: "font-size:22px;font-weight:800;" }, c.name),
+      el("div", { style: "font-size:22px;font-weight:800;color:var(--accent);" }, `${c.score} pts`)
+    ));
+  });
+  wrap.append(panel);
+
+  const ranking = el("div", { class: "panel" });
+  ranking.append(el("h2", {}, "Ranking final"));
+  const list = el("div", { class: "scoreboard" });
+  sorted.forEach((p, i) => {
+    list.append(el("div", { class: "name" },
+      el("span", { style: "width:22px;color:var(--muted);font-weight:700;" }, `${i+1}º`),
+      el("div", { class: "pin sm", style: `background:${p.color}` }),
+      el("span", {}, p.name)
+    ));
+    list.append(el("div", { class: "score" }, String(p.score)));
+  });
+  ranking.append(list);
+  wrap.append(ranking);
+
+  const actions = el("div", { class: "panel stack" });
+  actions.append(el("button", { onclick: () => {
+    state.players.forEach(p => p.score = 0);
+    state.leaderIndex = 0;
+    state.round = 0;
+    startRound();
+  }}, "Jogar novamente (mesmos jogadores)"));
+  actions.append(el("button", { class: "ghost", onclick: () => {
+    state.players = []; state.screen = "setup"; render();
+  }}, "Novos jogadores"));
+  actions.append(el("button", { class: "secondary", onclick: shareResult },
+    "Compartilhar imagem do ranking"));
+  wrap.append(actions);
+
+  return wrap;
+}
+
+async function shareResult() {
+  const blob = await buildResultImage();
+  const file = new File([blob], "hues-and-cues-resultado.png", { type: "image/png" });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: "Hues & Cues",
+        text: "Resultado da partida!",
+      });
+      return;
+    }
+  } catch (e) { /* user cancelled or unsupported */ }
+  // fallback: download
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "hues-and-cues-resultado.png";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function buildResultImage() {
+  const W = 1080;
+  const rowH = 88;
+  const headerH = 320;
+  const padding = 60;
+  const H = headerH + state.players.length * rowH + padding;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+
+  // Background gradient (usando as quinas do tabuleiro)
+  const g = ctx.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, `rgb(${CORNERS.TL.join(",")})`);
+  g.addColorStop(0.5, `rgb(${CENTER.join(",")})`);
+  g.addColorStop(1, `rgb(${CORNERS.BR.join(",")})`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(15,17,21,0.78)";
+  ctx.fillRect(0, 0, W, H);
+
+  const sorted = state.players.map((p, i) => ({ ...p, idx: i }))
+    .sort((a, b) => b.score - a.score);
+  const top = sorted[0].score;
+  const champions = sorted.filter(p => p.score === top);
+
+  // Title
+  ctx.fillStyle = "#ffcc33";
+  ctx.font = "800 56px -apple-system, Segoe UI, Roboto, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("HUES & CUES", W/2, 80);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "800 72px -apple-system, Segoe UI, Roboto, sans-serif";
+  ctx.fillText(champions.length > 1 ? "EMPATE" : "CAMPEÃO", W/2, 170);
+
+  // Champion line(s)
+  ctx.font = "700 44px -apple-system, Segoe UI, Roboto, sans-serif";
+  const champText = champions.map(c => `${c.name} — ${c.score} pts`).join("  •  ");
+  ctx.fillStyle = "#ffcc33";
+  ctx.fillText(champText, W/2, 250);
+
+  ctx.fillStyle = "rgba(255,255,255,0.6)";
+  ctx.font = "500 26px -apple-system, Segoe UI, Roboto, sans-serif";
+  ctx.fillText(`${state.round} rodada${state.round === 1 ? "" : "s"}`, W/2, 295);
+
+  // Ranking rows
+  ctx.textAlign = "left";
+  sorted.forEach((p, i) => {
+    const y = headerH + i * rowH;
+    // row bg
+    ctx.fillStyle = i % 2 === 0 ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.02)";
+    ctx.fillRect(padding, y, W - padding*2, rowH - 8);
+
+    // position
+    ctx.fillStyle = i === 0 ? "#ffcc33" : "rgba(255,255,255,0.7)";
+    ctx.font = "800 38px -apple-system, Segoe UI, Roboto, sans-serif";
+    ctx.fillText(`${i+1}º`, padding + 20, y + rowH/2 + 6);
+
+    // pin
+    ctx.beginPath();
+    ctx.arc(padding + 110, y + rowH/2, 22, 0, Math.PI*2);
+    ctx.fillStyle = p.color;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
+
+    // name
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "700 38px -apple-system, Segoe UI, Roboto, sans-serif";
+    ctx.fillText(p.name, padding + 160, y + rowH/2 + 12);
+
+    // score
+    ctx.textAlign = "right";
+    ctx.fillStyle = i === 0 ? "#ffcc33" : "#ffffff";
+    ctx.font = "800 44px -apple-system, Segoe UI, Roboto, sans-serif";
+    ctx.fillText(`${p.score}`, W - padding - 20, y + rowH/2 + 14);
+    ctx.textAlign = "left";
+  });
+
+  return new Promise(resolve => canvas.toBlob(resolve, "image/png"));
 }
 
 /* ---- shared bits ---- */
