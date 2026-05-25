@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Hues & Cues</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #1a1d24;
+    --text: #f5f5f5;
+    --muted: #9aa3b2;
+    --accent: #ffcc33;
+    --border: #2a2f3a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .app { max-width: 720px; margin: 0 auto; padding: 14px; }
+  h1 { margin: 0 0 8px; font-size: 22px; letter-spacing: .5px; }
+  h2 { margin: 14px 0 8px; font-size: 16px; color: var(--muted); font-weight: 500; }
+  button {
+    background: var(--accent); color: #1a1d24; border: 0;
+    padding: 12px 16px; border-radius: 10px;
+    font-size: 15px; font-weight: 600;
+    cursor: pointer; touch-action: manipulation;
+  }
+  button.secondary {
+    background: transparent; color: var(--text);
+    border: 1px solid var(--border);
+  }
+  button.ghost {
+    background: var(--panel); color: var(--text);
+  }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px; margin-bottom: 12px;
+  }
+  input[type=text], input[type=number] {
+    background: #11141a; color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; font-size: 15px; width: 100%;
+  }
+  .player-row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+  .pin {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid #fff; flex-shrink: 0;
+    box-shadow: 0 0 0 1px #000;
+  }
+  .pin.sm { width: 18px; height: 18px; border-width: 1.5px; }
+  .color-options { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .color-options .pin { cursor: pointer; opacity: .45; }
+  .color-options .pin.selected { opacity: 1; outline: 2px solid var(--accent); outline-offset: 2px; }
+  .color-options .pin.taken { opacity: .15; cursor: not-allowed; }
+
+  /* Board */
+  .board-wrap {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: #000;
+    touch-action: manipulation;
+  }
+  .board {
+    display: grid;
+    grid-template-columns: 22px repeat(30, 1fr);
+    grid-template-rows: 18px repeat(16, 1fr);
+    width: 100%;
+    aspect-ratio: calc((30 + 0.7) / (16 + 0.6));
+    gap: 0;
+  }
+  .hdr {
+    background: #0c0e12; color: var(--muted);
+    font-size: 9px; display: flex; align-items: center; justify-content: center;
+    user-select: none;
+  }
+  .cell {
+    position: relative;
+    cursor: pointer;
+  }
+  .cell.target-reveal::after {
+    content: "★"; position: absolute; inset: 0;
+    color: #000; font-size: 14px; font-weight: 900;
+    display: flex; align-items: center; justify-content: center;
+    text-shadow: 0 0 3px #fff, 0 0 3px #fff;
+  }
+  .cell .marker {
+    position: absolute; inset: 12%;
+    border-radius: 50%;
+    border: 1.5px solid #fff;
+    box-shadow: 0 0 0 1px #000, 0 1px 3px rgba(0,0,0,.5);
+    pointer-events: none;
+  }
+  .cell .marker.leader::after {
+    content: "L"; position: absolute; inset: 0;
+    color: #fff; font-size: 9px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    text-shadow: 0 0 2px #000;
+  }
+  .cell .scorering {
+    position: absolute; inset: 0;
+    border: 2px dashed rgba(255,255,255,.55);
+    pointer-events: none;
+  }
+
+  /* Cursor / selection */
+  .cursor {
+    position: absolute;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #000, inset 0 0 0 1px #000;
+    pointer-events: none;
+    border-radius: 2px;
+  }
+
+  .scoreboard {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px 12px;
+    align-items: center;
+  }
+  .scoreboard .name { display: flex; align-items: center; gap: 8px; }
+  .scoreboard .score { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .scoreboard .leader-badge {
+    font-size: 10px; background: var(--accent); color: #1a1d24;
+    padding: 1px 6px; border-radius: 10px; font-weight: 700;
+  }
+
+  .big {
+    height: 80px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; color: #000; font-size: 14px;
+    text-shadow: 0 1px 0 rgba(255,255,255,.4);
+    border: 1px solid var(--border);
+  }
+  .center { text-align: center; }
+  .small { font-size: 12px; color: var(--muted); }
+  .pill {
+    display: inline-block; padding: 4px 10px; border-radius: 999px;
+    background: #11141a; border: 1px solid var(--border); font-size: 12px;
+  }
+  .hide { display: none !important; }
+  .stack > * + * { margin-top: 8px; }
+  .points-list { font-size: 13px; }
+  .points-list .row-item {
+    display: grid; grid-template-columns: auto 1fr auto auto;
+    gap: 8px; align-items: center; padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .pts { font-weight: 700; color: var(--accent); }
+  .dist { color: var(--muted); font-size: 12px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   Cores: gera tabuleiro 30x16 inspirado em Hues & Cues.
+   Colunas = matiz (hue), Linhas = luminosidade.
+   ============================================================ */
+const COLS = 30, ROWS = 16;
+function colorAt(c, r) {
+  // c: 0..29 hue, r: 0..15 lightness top→bottom
+  const hue = (c / COLS) * 360;
+  const sat = 95;
+  // top (r=0) ~ light (90%), bottom (r=15) ~ dark (10%)
+  const light = 90 - (r / (ROWS - 1)) * 80;
+  return `hsl(${hue.toFixed(1)} ${sat}% ${light.toFixed(1)}%)`;
+}
+const COL_LABELS = Array.from({length: COLS}, (_, i) => String(i + 1));
+const ROW_LABELS = "ABCDEFGHIJKLMNOP".split("");
+
+/* Cores disponíveis para pinos */
+const PIN_COLORS = [
+  "#e53935", "#fb8c00", "#fdd835", "#43a047",
+  "#00acc1", "#1e88e5", "#5e35b1", "#d81b60",
+  "#8d6e63", "#ffffff",
+];
+
+/* ============================================================
+   Estado
+   ============================================================ */
+const state = {
+  screen: "setup",      // setup | leader | guess | reveal | end
+  players: [],          // {name, color, score}
+  leaderIndex: 0,
+  round: 0,
+  target: null,         // {c, r}
+  guesses: {},          // playerIndex -> {c, r}
+  guessOrder: [],       // ordered list of player indices to guess
+  currentGuessIdx: 0,
+  selected: null,       // {c, r} cursor for current guess
+  history: [],          // rounds played
+  maxRounds: null,      // optional
+};
+
+/* ============================================================
+   Helpers
+   ============================================================ */
+const $ = (sel, el=document) => el.querySelector(sel);
+const el = (tag, attrs={}, ...children) => {
+  const n = document.createElement(tag);
+  for (const k in attrs) {
+    if (k === "class") n.className = attrs[k];
+    else if (k === "style") n.setAttribute("style", attrs[k]);
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), attrs[k]);
+    else if (attrs[k] != null) n.setAttribute(k, attrs[k]);
+  }
+  for (const c of children) {
+    if (c == null || c === false) continue;
+    n.append(c.nodeType ? c : document.createTextNode(c));
+  }
+  return n;
+};
+function chebyshev(a, b) {
+  return Math.max(Math.abs(a.c - b.c), Math.abs(a.r - b.r));
+}
+function scoreFor(distance) {
+  // Bullseye 3, adjacent (1) 2, next ring (2) 1, fora 0
+  if (distance === 0) return 3;
+  if (distance === 1) return 2;
+  if (distance === 2) return 1;
+  return 0;
+}
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/* ============================================================
+   Render
+   ============================================================ */
+function render() {
+  const app = $("#app");
+  app.innerHTML = "";
+  switch (state.screen) {
+    case "setup":   app.append(renderSetup()); break;
+    case "leader":  app.append(renderLeader()); break;
+    case "guess":   app.append(renderGuess()); break;
+    case "reveal":  app.append(renderReveal()); break;
+  }
+}
+
+/* ---- SETUP ---- */
+function renderSetup() {
+  const wrap = el("div", { class: "stack" });
+  wrap.append(el("h1", {}, "Hues & Cues"));
+  wrap.append(el("p", { class: "small" },
+    "Passe o celular entre amigos. O líder da rodada vê uma cor secreta, diz uma dica de uma palavra; os outros tocam no tabuleiro para chutar."));
+
+  const panel = el("div", { class: "panel stack" });
+  panel.append(el("h2", {}, "Jogadores (2 a 10)"));
+
+  const list = el("div", { id: "playerList" });
+
+  function addPlayer(name = "", color = null) {
+    if (state.players.length >= 10) return;
+    const used = new Set(state.players.map(p => p.color));
+    const pick = color || PIN_COLORS.find(c => !used.has(c)) || PIN_COLORS[0];
+    state.players.push({ name, color: pick, score: 0 });
+  }
+
+  function refreshList() {
+    list.innerHTML = "";
+    state.players.forEach((p, i) => {
+      const row = el("div", { class: "player-row" });
+      const pin = el("div", { class: "pin", style: `background:${p.color}` });
+      pin.addEventListener("click", () => openColorPicker(i));
+      const input = el("input", {
+        type: "text", value: p.name || "",
+        placeholder: `Jogador ${i+1}`,
+        oninput: (e) => { state.players[i].name = e.target.value; },
+      });
+      const rm = el("button", { class: "secondary", onclick: () => {
+        state.players.splice(i, 1); refreshList();
+      } }, "✕");
+      row.append(pin, input, rm);
+      list.append(row);
+
+      // color picker inline
+      const picker = el("div", { class: "color-options", id: `picker-${i}`, style: "display:none" });
+      PIN_COLORS.forEach(c => {
+        const taken = state.players.some((q, j) => j !== i && q.color === c);
+        const sw = el("div", {
+          class: "pin sm" + (p.color === c ? " selected" : "") + (taken ? " taken" : ""),
+          style: `background:${c}`,
+          onclick: () => {
+            if (taken) return;
+            state.players[i].color = c;
+            refreshList();
+          }
+        });
+        picker.append(sw);
+      });
+      list.append(picker);
+    });
+  }
+  function openColorPicker(i) {
+    const p = document.getElementById(`picker-${i}`);
+    if (!p) return;
+    p.style.display = p.style.display === "none" ? "flex" : "none";
+  }
+
+  if (state.players.length === 0) {
+    addPlayer("");
+    addPlayer("");
+  }
+  refreshList();
+  panel.append(list);
+
+  const addBtn = el("button", { class: "ghost", onclick: () => { addPlayer(); refreshList(); } },
+    "+ Adicionar jogador");
+  panel.append(addBtn);
+
+  const start = el("button", { onclick: startGame }, "Começar partida");
+  panel.append(start);
+
+  wrap.append(panel);
+  return wrap;
+}
+
+function startGame() {
+  const valid = state.players.filter(p => (p.name || "").trim().length > 0);
+  if (valid.length < 2) {
+    alert("Coloque pelo menos 2 jogadores com nome.");
+    return;
+  }
+  state.players = valid;
+  state.players.forEach(p => p.score = 0);
+  state.leaderIndex = 0;
+  state.round = 0;
+  state.history = [];
+  startRound();
+}
+
+function startRound() {
+  state.round += 1;
+  state.target = { c: Math.floor(Math.random() * COLS), r: Math.floor(Math.random() * ROWS) };
+  state.guesses = {};
+  // guess order: todos menos o líder, embaralhados
+  const others = state.players.map((_, i) => i).filter(i => i !== state.leaderIndex);
+  state.guessOrder = shuffle(others);
+  state.currentGuessIdx = 0;
+  state.selected = null;
+  state.screen = "leader";
+  render();
+}
+
+/* ---- LEADER ---- */
+function renderLeader() {
+  const wrap = el("div", { class: "stack" });
+  wrap.append(renderTopbar());
+
+  const leader = state.players[state.leaderIndex];
+  const t = state.target;
+  const color = colorAt(t.c, t.r);
+
+  const panel = el("div", { class: "panel stack center" });
+  panel.append(el("h2", {}, `Líder: ${leader.name}`));
+  panel.append(el("p", { class: "small" },
+    "Apenas o líder olha. Esconda dos outros e diga uma dica de UMA palavra (depois pode dar 2 palavras se quiser)."));
+  const big = el("div", { class: "big", style: `background:${color}` },
+    `${COL_LABELS[t.c]}-${ROW_LABELS[t.r]}`);
+  panel.append(big);
+
+  const reveal = el("button", { onclick: () => {
+    if (!confirm("Mostrar a cor secreta?")) return;
+    big.style.background = color;
+    big.textContent = `Cor secreta: ${COL_LABELS[t.c]}${ROW_LABELS[t.r]}`;
+  }}, "Revelar cor (só o líder)");
+  // Already shown — alternative: hide initially
+  // Simpler: show by default with a clear instruction.
+
+  const next = el("button", { onclick: () => { state.screen = "guess"; render(); } },
+    "Pronto — passar para chutes");
+  panel.append(next);
+  wrap.append(panel);
+  return wrap;
+}
+
+/* ---- GUESS ---- */
+function renderGuess() {
+  const wrap = el("div", { class: "stack" });
+  wrap.append(renderTopbar());
+
+  const pIdx = state.guessOrder[state.currentGuessIdx];
+  const player = state.players[pIdx];
+
+  const header = el("div", { class: "panel" });
+  header.append(el("div", { class: "row" },
+    el("div", { class: "pin", style: `background:${player.color}` }),
+    el("div", {},
+      el("div", { style: "font-weight:700" }, `Vez de ${player.name}`),
+      el("div", { class: "small" }, `Toque uma cor no tabuleiro e confirme.`)
+    )
+  ));
+  wrap.append(header);
+
+  // Board
+  const { boardWrap } = renderBoard({
+    showTarget: false,
+    showOtherGuesses: true,
+    interactive: true,
+    onPick: (c, r) => {
+      state.selected = { c, r };
+      render();
+    },
+    selected: state.selected,
+    forPlayerIndex: pIdx,
+  });
+  wrap.append(boardWrap);
+
+  // Selected info + confirm
+  const ctrl = el("div", { class: "panel row", style: "justify-content:space-between" });
+  if (state.selected) {
+    const col = colorAt(state.selected.c, state.selected.r);
+    ctrl.append(el("div", { class: "row" },
+      el("div", { class: "pin sm", style: `background:${col}` }),
+      el("div", { class: "small" },
+        `Selecionado: ${COL_LABELS[state.selected.c]}${ROW_LABELS[state.selected.r]}`)
+    ));
+    ctrl.append(el("button", { onclick: confirmGuess }, "Confirmar chute"));
+  } else {
+    ctrl.append(el("div", { class: "small" }, "Toque numa célula para escolher."));
+  }
+  wrap.append(ctrl);
+
+  return wrap;
+}
+
+function confirmGuess() {
+  if (!state.selected) return;
+  const pIdx = state.guessOrder[state.currentGuessIdx];
+  state.guesses[pIdx] = state.selected;
+  state.selected = null;
+  state.currentGuessIdx += 1;
+  if (state.currentGuessIdx >= state.guessOrder.length) {
+    // Leader places his/her own marker via reveal? In real game leader doesn't guess.
+    state.screen = "reveal";
+    computeScores();
+  }
+  render();
+}
+
+function computeScores() {
+  const t = state.target;
+  let leaderBonus = 0;
+  state.lastRound = { gains: {}, distances: {} };
+  state.guessOrder.forEach(pIdx => {
+    const g = state.guesses[pIdx];
+    const d = chebyshev(g, t);
+    const pts = scoreFor(d);
+    state.players[pIdx].score += pts;
+    state.lastRound.gains[pIdx] = pts;
+    state.lastRound.distances[pIdx] = d;
+    if (d === 1) leaderBonus += 1; // ponto pro líder por cone adjacente
+    if (d === 0) leaderBonus += 2; // bullseye dá 2 pro líder
+  });
+  state.players[state.leaderIndex].score += leaderBonus;
+  state.lastRound.gains[state.leaderIndex] = leaderBonus;
+}
+
+/* ---- REVEAL ---- */
+function renderReveal() {
+  const wrap = el("div", { class: "stack" });
+  wrap.append(renderTopbar());
+
+  const { boardWrap } = renderBoard({
+    showTarget: true,
+    showOtherGuesses: true,
+    interactive: false,
+  });
+  wrap.append(boardWrap);
+
+  const t = state.target;
+  const list = el("div", { class: "panel" });
+  list.append(el("h2", {}, `Cor secreta: ${COL_LABELS[t.c]}${ROW_LABELS[t.r]}`));
+  const points = el("div", { class: "points-list" });
+  state.guessOrder.forEach(pIdx => {
+    const p = state.players[pIdx];
+    const d = state.lastRound.distances[pIdx];
+    const pts = state.lastRound.gains[pIdx];
+    points.append(el("div", { class: "row-item" },
+      el("div", { class: "pin sm", style: `background:${p.color}` }),
+      el("div", {}, p.name),
+      el("div", { class: "dist" }, d === 0 ? "BULLSEYE" : `dist ${d}`),
+      el("div", { class: "pts" }, `+${pts}`),
+    ));
+  });
+  const leader = state.players[state.leaderIndex];
+  const lb = state.lastRound.gains[state.leaderIndex] || 0;
+  points.append(el("div", { class: "row-item" },
+    el("div", { class: "pin sm", style: `background:${leader.color}` }),
+    el("div", {}, `${leader.name} (líder)`),
+    el("div", { class: "dist" }, "bônus por cones próximos"),
+    el("div", { class: "pts" }, `+${lb}`),
+  ));
+  list.append(points);
+  wrap.append(list);
+
+  wrap.append(renderScoreboard());
+
+  const actions = el("div", { class: "panel row" });
+  actions.append(el("button", { onclick: () => {
+    state.leaderIndex = (state.leaderIndex + 1) % state.players.length;
+    startRound();
+  }}, "Próxima rodada"));
+  actions.append(el("button", { class: "secondary", onclick: () => {
+    if (confirm("Encerrar partida?")) { state.screen = "setup"; render(); }
+  }}, "Encerrar partida"));
+  wrap.append(actions);
+
+  return wrap;
+}
+
+/* ---- shared bits ---- */
+function renderTopbar() {
+  const top = el("div", { class: "panel topbar" });
+  top.append(el("div", {},
+    el("div", { style: "font-weight:700" }, `Rodada ${state.round}`),
+    el("div", { class: "small" }, `Líder: ${state.players[state.leaderIndex].name}`)
+  ));
+  const scores = el("div", { class: "row" });
+  state.players.forEach(p => {
+    const chip = el("div", { class: "pill row", style: "gap:6px" },
+      el("div", { class: "pin sm", style: `background:${p.color}` }),
+      el("span", {}, `${p.name}: ${p.score}`)
+    );
+    scores.append(chip);
+  });
+  top.append(scores);
+  return top;
+}
+
+function renderScoreboard() {
+  const panel = el("div", { class: "panel" });
+  panel.append(el("h2", {}, "Placar"));
+  const sb = el("div", { class: "scoreboard" });
+  const sorted = state.players.map((p, i) => ({ p, i }))
+    .sort((a, b) => b.p.score - a.p.score);
+  sorted.forEach(({ p, i }) => {
+    const left = el("div", { class: "name" },
+      el("div", { class: "pin sm", style: `background:${p.color}` }),
+      el("span", {}, p.name),
+      i === state.leaderIndex ? el("span", { class: "leader-badge" }, "LÍDER") : null
+    );
+    sb.append(left);
+    sb.append(el("div", { class: "score" }, String(p.score)));
+  });
+  panel.append(sb);
+  return panel;
+}
+
+/* ---- Board renderer ---- */
+function renderBoard({ showTarget, showOtherGuesses, interactive, onPick, selected, forPlayerIndex }) {
+  const boardWrap = el("div", { class: "board-wrap" });
+  const board = el("div", { class: "board" });
+
+  // Top-left corner
+  board.append(el("div", { class: "hdr" }, ""));
+  // Column headers
+  for (let c = 0; c < COLS; c++) {
+    board.append(el("div", { class: "hdr" }, COL_LABELS[c]));
+  }
+  for (let r = 0; r < ROWS; r++) {
+    board.append(el("div", { class: "hdr" }, ROW_LABELS[r]));
+    for (let c = 0; c < COLS; c++) {
+      const cell = el("div", {
+        class: "cell",
+        style: `background:${colorAt(c, r)}`,
+        "data-c": c, "data-r": r,
+      });
+
+      // Target reveal
+      if (showTarget && state.target && state.target.c === c && state.target.r === r) {
+        cell.classList.add("target-reveal");
+        // scoring rings drawn around target are simulated by border on neighbors (skip for simplicity)
+      }
+
+      // Markers
+      const markers = [];
+      if (showOtherGuesses || !interactive) {
+        for (const pIdxStr in state.guesses) {
+          const pIdx = +pIdxStr;
+          const g = state.guesses[pIdx];
+          if (g.c === c && g.r === r) {
+            // hide own marker for current guesser unless reveal
+            if (interactive && pIdx === forPlayerIndex) continue;
+            const p = state.players[pIdx];
+            const m = el("div", { class: "marker" + (pIdx === state.leaderIndex ? " leader" : ""),
+              style: `background:${p.color}` });
+            cell.append(m);
+          }
+        }
+      }
+
+      // Selected cursor
+      if (selected && selected.c === c && selected.r === r) {
+        const p = state.players[forPlayerIndex];
+        const m = el("div", { class: "marker", style: `background:${p.color};opacity:.7;` });
+        cell.append(m);
+      }
+
+      if (interactive) {
+        const handler = () => onPick(c, r);
+        cell.addEventListener("click", handler);
+      }
+      board.append(cell);
+    }
+  }
+
+  boardWrap.append(board);
+  return { boardWrap };
+}
+
+/* ============================================================
+   Boot
+   ============================================================ */
+render();
+</script>
+</body>
+</html>
